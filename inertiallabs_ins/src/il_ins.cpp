@@ -231,7 +231,13 @@ int main(int argc, char** argv)
     }
 
     context.node = node;
-    bool use_device_time = node->declare_parameter<bool>("use_device_time", true);
+
+    bool use_device_time = true;
+    if (node->has_parameter("use_device_time")) {
+       use_device_time = node->get_parameter("use_device_time").as_bool();
+    } else {
+        node->declare_parameter<bool>("use_device_time", true);
+    }
     context.use_device_time = use_device_time;
     context.time_initialized = false;
 
@@ -275,7 +281,10 @@ int main(int argc, char** argv)
     }
 
     #ifdef __linux__
-    bool enableRealtime = node->declare_parameter<bool>("enable_realtime_priority", false);
+    bool enableRealtime = false;
+    if (node->has_parameter("enable_realtime_priority")) {
+        enableRealtime = node->get_parameter("enable_realtime_priority").as_bool();
+    }
     if (enableRealtime) {
         // Optional: attempt real-time priority for low-latency sensor handling
         struct sched_param sp;
