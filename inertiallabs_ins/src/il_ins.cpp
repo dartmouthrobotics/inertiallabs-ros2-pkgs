@@ -241,6 +241,17 @@ int main(int argc, char** argv)
     RCLCPP_INFO(node->get_logger(), "Found INS S/N %s\n", serialNumber.c_str());
     context.imuFrameId = serialNumber;
 
+    #ifdef __linux__
+    bool enableRealtime = node->declare_parameter<bool>("enable_realtime_priority", false);
+    if (enableRealtime) {
+        // Optional: attempt real-time priority for low-latency sensor handling
+        struct sched_param sp;
+        sp.sched_priority = 99;
+        if (sched_setscheduler(0, SCHED_FIFO, &sp) != 0) {
+            RCLCPP_WARN(node->get_logger(), "Could not set realtime priority: %s", strerror(errno));
+        }
+    }
+    #endif
 
     il_err = ins.start(insOutputFormat);
     if (il_err)
