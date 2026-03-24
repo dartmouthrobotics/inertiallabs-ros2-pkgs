@@ -53,6 +53,8 @@ namespace IL {
         config.c_cflag = baudrate & ~(CSIZE | PARENB);
         config.c_cflag |= CS8 | CREAD | CLOCAL;
         config.c_lflag |= IEXTEN;
+        config.c_cc[VMIN]  = 0;   
+        config.c_cc[VTIME] = 0;   
         if (tcsetattr(fd, TCSANOW, &config) < 0) return 3;
         return 0;
     }
