@@ -35,6 +35,12 @@ struct Context {
     //publish as sensor_msgs/msg/Imu
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imuDataPub;
 
+    bool use_device_time;
+    // Timestamp synchronization
+    rclcpp::Time ros_time_start;
+    double device_time_start;
+    bool time_initialized;
+
     std::string imuFrameId;
 };
 
@@ -54,7 +60,20 @@ void publishDevice(IL::INSDataStruct* data, void* contextPtr)
 {
     Context* context = reinterpret_cast<Context*>(contextPtr);
 
-    const rclcpp::Time timestamp = context->node->now();
+    rclcpp::Time timestamp;
+    if (context->use_device_time) {
+        if (!context->time_initialized) {
+            context->ros_time_start = context->node->now();
+            context->device_time_start = data->GPS_IMU_Time;
+            context->time_initialized = true;
+            timestamp = context->ros_time_start;
+        } else {
+            double device_time_delta = data->GPS_IMU_Time - context->device_time_start;
+            timestamp = context->ros_time_start + rclcpp::Duration::from_seconds(device_time_delta);
+        }
+    } else {
+        timestamp = context->node->now();
+    }
 
     if (context->sensorDataPub->get_subscription_count() > 0)
     {
@@ -212,6 +231,9 @@ int main(int argc, char** argv)
     }
 
     context.node = node;
+    bool use_device_time = node->declare_parameter<bool>("use_device_time", true);
+    context.use_device_time = use_device_time;
+    context.time_initialized = false;
 
     // Initializing Publishers
     context.sensorDataPub = node->create_publisher<inertiallabs_msgs::msg::SensorData>("Inertial_Labs/sensor_data", 10);
@@ -241,7 +263,16 @@ int main(int argc, char** argv)
 
     const std::string serialNumber(reinterpret_cast<const char *>(devInfo.IDN), 8);
     RCLCPP_INFO(node->get_logger(), "Found INS S/N %s\n", serialNumber.c_str());
-    context.imuFrameId = serialNumber;
+    std::string frameIdParam = "";
+    if (node->has_parameter("frame_id")) {
+        frameIdParam = node->get_parameter("frame_id").as_string();
+    }
+
+    if (!frameIdParam.empty()) {
+        context.imuFrameId = frameIdParam;
+    } else {
+        context.imuFrameId = serialNumber;
+    }
 
     #ifdef __linux__
     bool enableRealtime = node->declare_parameter<bool>("enable_realtime_priority", false);
