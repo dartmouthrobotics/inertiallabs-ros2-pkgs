@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <math.h>
 #include <stdlib.h>
+#include <sched.h>
+#include <cstring>
 
 #include <rclcpp/rclcpp.hpp>
 
