@@ -15,6 +15,10 @@
 #include <inertiallabs_msgs/msg/gnss_data.hpp>
 #include <inertiallabs_msgs/msg/marine_data.hpp>
 
+//publish as sensor_msgs/msg/Imu
+#include <sensor_msgs/msg/imu.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+
 //Publishers
 
 struct Context {
@@ -26,8 +30,23 @@ struct Context {
     rclcpp::Publisher<inertiallabs_msgs::msg::MarineData>::SharedPtr marineDataPub;
     rclcpp::Publisher<inertiallabs_msgs::msg::SensorData>::SharedPtr sensorDataPub;
 
+    //publish as sensor_msgs/msg/Imu
+    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imuDataPub;
+
     std::string imuFrameId;
 };
+
+tf2::Quaternion rpyToQuaternion(double r, double p, double y)
+{
+  double roll  = r * M_PI / 180.0;
+  double pitch = p * M_PI / 180.0;
+  double yaw   = y * M_PI / 180.0;
+
+  tf2::Quaternion q;
+  q.setRPY(roll, pitch, yaw);  // roll, pitch, yaw
+
+  return q;
+}
 
 void publishDevice(IL::INSDataStruct* data, void* contextPtr)
 {
@@ -141,6 +160,33 @@ void publishDevice(IL::INSDataStruct* data, void* contextPtr)
         msg_marine_data.significant_wave_height = data->significant_wave_height;
         context->marineDataPub->publish(msg_marine_data);
     }
+
+    if (context->imuDataPub->get_subscription_count() > 0)
+    {
+        sensor_msgs::msg::Imu imu_msg;
+        // header
+        imu_msg.header.stamp = timestamp;
+        imu_msg.header.frame_id = context->imuFrameId;
+
+        // orientation 
+        tf2::Quaternion q = rpyToQuaternion(data->Roll, data->Pitch, data->Heading);
+        imu_msg.orientation.x = q.x();
+        imu_msg.orientation.y = q.y();
+        imu_msg.orientation.z = q.z();
+        imu_msg.orientation.w = q.w();
+
+        // linear_acceleration (m/s^2) 
+        imu_msg.linear_acceleration.x = data->Acc[0];
+        imu_msg.linear_acceleration.y = data->Acc[1];
+        imu_msg.linear_acceleration.z = data->Acc[2];
+
+        // angular_velocity (rad/s)
+        imu_msg.angular_velocity.x = data->Gyro[0] * M_PI / 180.0;
+        imu_msg.angular_velocity.y = data->Gyro[1] * M_PI / 180.0;
+        imu_msg.angular_velocity.z = data->Gyro[2] * M_PI / 180.0;
+
+        context->imuDataPub->publish(imu_msg);
+    }
 }
 
 int main(int argc, char** argv)
@@ -148,7 +194,6 @@ int main(int argc, char** argv)
     rclcpp::init(argc, argv);
     auto options = rclcpp::NodeOptions().allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
     rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("il_ins", options);
-    rclcpp::Rate rate(100); // 100 hz
 
     std::string port("serial:/dev/ttyUSB0:460800");
     int insOutputFormat = 82; // 0x52
@@ -167,11 +212,12 @@ int main(int argc, char** argv)
     context.node = node;
 
     // Initializing Publishers
-    context.sensorDataPub = node->create_publisher<inertiallabs_msgs::msg::SensorData>("/Inertial_Labs/sensor_data", 1);
-    context.insDataPub = node->create_publisher<inertiallabs_msgs::msg::InsData>("/Inertial_Labs/ins_data", 1);
-    context.gpsDataPub = node->create_publisher<inertiallabs_msgs::msg::GpsData>("/Inertial_Labs/gps_data", 1);
-    context.gnssDataPub = node->create_publisher<inertiallabs_msgs::msg::GnssData>("/Inertial_Labs/gnss_data", 1);
-    context.marineDataPub = node->create_publisher<inertiallabs_msgs::msg::MarineData>("/Inertial_Labs/marine_data", 1);
+    context.sensorDataPub = node->create_publisher<inertiallabs_msgs::msg::SensorData>("Inertial_Labs/sensor_data", 10);
+    context.insDataPub = node->create_publisher<inertiallabs_msgs::msg::InsData>("Inertial_Labs/ins_data", 10);
+    context.gpsDataPub = node->create_publisher<inertiallabs_msgs::msg::GpsData>("Inertial_Labs/gps_data", 10);
+    context.gnssDataPub = node->create_publisher<inertiallabs_msgs::msg::GnssData>("Inertial_Labs/gnss_data", 10);
+    context.marineDataPub = node->create_publisher<inertiallabs_msgs::msg::MarineData>("Inertial_Labs/marine_data", 10);
+    context.imuDataPub = node->create_publisher<sensor_msgs::msg::Imu>("imu/data", 10);
 
     // Communication with the device
     RCLCPP_INFO(node->get_logger(), "Connecting to INS at URL %s\n", port.c_str());
@@ -194,6 +240,7 @@ int main(int argc, char** argv)
     const std::string serialNumber(reinterpret_cast<const char *>(devInfo.IDN), 8);
     RCLCPP_INFO(node->get_logger(), "Found INS S/N %s\n", serialNumber.c_str());
     context.imuFrameId = serialNumber;
+
 
     il_err = ins.start(insOutputFormat);
     if (il_err)
