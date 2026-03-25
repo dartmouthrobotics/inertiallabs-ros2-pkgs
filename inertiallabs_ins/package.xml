@@ -18,6 +18,7 @@
   <depend>tf2_ros</depend>
   <depend>rclpy</depend>
   <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
   <depend>inertiallabs_msgs</depend>
 
   <export>
