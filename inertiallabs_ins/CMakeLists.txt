@@ -14,6 +14,7 @@ find_package(ament_cmake REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -35,7 +36,7 @@ else()
     set(IL_PLATFORM "linux")
 endif()
 
-add_executable(il_ins
+add_library(il_ins SHARED
                src/il_ins.cpp
                ../inertiallabs_sdk/ILDriver.cpp
                ../inertiallabs_sdk/UDDParser.cpp
@@ -50,18 +51,44 @@ ament_target_dependencies(il_ins
                           geometry_msgs
                           tf2_ros
                           inertiallabs_msgs
+                          rclcpp_components
+)
+
+rclcpp_components_register_nodes(il_ins "IL_INS")
+
+add_executable(il_ins_node
+               src/il_ins.cpp
+               ../inertiallabs_sdk/ILDriver.cpp
+               ../inertiallabs_sdk/UDDParser.cpp
+               ../inertiallabs_sdk/platforms/${IL_PLATFORM}/SerialPort.cpp
+               ../inertiallabs_sdk/platforms/${IL_PLATFORM}/NetClient.cpp
+)
+
+ament_target_dependencies(il_ins_node
+                          rclcpp
+                          rclpy
+                          sensor_msgs
+                          geometry_msgs
+                          tf2_ros
+                          inertiallabs_msgs
+                          rclcpp_components
 )
 
 if(NOT WIN32)
     target_link_libraries(il_ins  pthread)
+    target_link_libraries(il_ins_node  pthread)
 endif()
 
 install(TARGETS il_ins
-    DESTINATION
-        lib/${PROJECT_NAME})
+    DESTINATION lib
+)
 
-install(DIRECTORY launch/
-  DESTINATION share/${PROJECT_NAME}/launch
+install(TARGETS il_ins_node
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY launch
+    DESTINATION share/${PROJECT_NAME}
 )
 
 ament_package()
