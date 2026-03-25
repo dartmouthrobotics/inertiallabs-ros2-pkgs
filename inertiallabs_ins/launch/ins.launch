@@ -1,12 +1,13 @@
 <launch>
 
+  <arg name="namespace"              default=""/>
   <arg name="ins_url"                default="serial:/dev/ttyUSB0:921600"/>
   <arg name="ins_output_format"      default="149"/>
   <arg name="frame_id"               default=""/> <!-- If empty, serial number will be used -->
   <arg name="enable_realtime_priority" default="false"/>
   <arg name="use_device_time"        default="true"/>
-
-  <node pkg="inertiallabs_ins" exec="il_ins_node" name="INS" output="both">
+ 
+  <node pkg="inertiallabs_ins" exec="il_ins_node" name="INS"     namespace="$(var namespace)" output="both">
     <param name="ins_url"                value="$(var ins_url)"/>
     <param name="ins_output_format"      value="$(var ins_output_format)"/>
     <param name="frame_id"               value="$(var frame_id)"/>
